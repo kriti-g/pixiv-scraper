@@ -1,0 +1,7 @@
+{
+    "refresh_token": "token",
+    "download_path": "./downloads",
+    "interval": 1,
+    "download_size": "large",
+    "user_id": 0
+}
