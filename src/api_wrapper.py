@@ -62,7 +62,7 @@ class ApiWrapper:
                 self.refresh_auth_if_needed()
                 if self.api.download(url=url, path=path, replace=False):
                     self.logger.info(f"Downloaded image at {url}")
-                    time.sleep(sleep_interval)
+                    sleep(sleep_interval)
                     return True
             except IncompleteRead:
                 self.logger.error("IncompleteRead exception while trying to download.")
