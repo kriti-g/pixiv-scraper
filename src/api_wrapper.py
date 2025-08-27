@@ -1,34 +1,48 @@
 import backoff
 import os
 from pixivpy3 import AppPixivAPI
-from logging import Logger
 from datetime import datetime
 from time import sleep
 from http.client import RemoteDisconnected
 from urllib3.exceptions import IncompleteRead
 from pixivpy3 import PixivError
 from tqdm import tqdm
+from logging import getLogger
 
 class ApiWrapper:
-    def __init__(self, refresh_token: str,  illust_dl_size: str, logger: Logger):
+    def __init__(self, refresh_token: str,  illust_dl_size: str):
         self.refresh_token = refresh_token
         self.illust_dl_size = illust_dl_size
-        self.logger = logger
+        self.logger = getLogger(__name__)
 
-        logger.info("Initialising Pixiv API.")
+        self.logger.info("Initialising Pixiv API.")
         self.api = AppPixivAPI()
         self.api.auth(refresh_token=refresh_token)
-        logger.info("Starting timer.")
+        self.logger.info("Starting timer.")
         self.last_refresh = datetime.now()
 
-    @backoff.on_exception(backoff.expo, (RemoteDisconnected, PixivError), max_time=300)    
-    def refresh_auth_if_needed(self): 
+    @backoff.on_exception(backoff.expo, (RemoteDisconnected, PixivError), max_time=300)
+    def refresh_auth_if_needed(self):
         seconds_since_last_refresh = (datetime.now() - self.last_refresh).total_seconds()
         if seconds_since_last_refresh > 3400:
             self.logger.info(f"{seconds_since_last_refresh} seconds passed, refreshing API auth and resetting timer.")
             self.api.auth(refresh_token=self.refresh_token)
             self.last_refresh = datetime.now()
-    
+
+    def download_novel(self, novel, novel_dl_path):
+        str_id = str(novel.id)
+        fname = novel_dl_path + "/" + str_id + ".txt"
+        if not novel.title:
+            self.logger.info(f"Novel {str_id} may have been deleted or access restricted.")
+        elif os.path.exists(fname):
+            skipped_count += 1
+        else:
+            self.logger.info("Saving novel: " + str_id)
+            novel_result = self.api.webview_novel(novel.id)
+            if novel_result:
+                with open(fname, "w", encoding="utf-8") as f:
+                    f.write(str(novel_result))
+
     def download_illust(self, illust, illusts_dl_path, sleep_interval):
         str_id = str(illust.id)
         illust_dl_path = illusts_dl_path + "/" + str_id + "/"
@@ -46,7 +60,7 @@ class ApiWrapper:
             self.logger.info(f"Skipped {skipped_count}/{len(pages)} pages for {str_id}.")
         self.logger.info(f"Completed {str_id}.")
 
-    @backoff.on_exception(backoff.expo, (RemoteDisconnected, PixivError), max_time=300)       
+    @backoff.on_exception(backoff.expo, (RemoteDisconnected, PixivError), max_time=300)
     def download_img(self, img, path, sleep_interval: 1):
         url = None
         if self.illust_dl_size in img.image_urls.keys():
@@ -55,7 +69,7 @@ class ApiWrapper:
         if not url:
             self.logger.info(f"Can't find URL for: {str(img.id)}")
             return False
-        
+
         self.mk_dir_if_needed(path)
         for _ in range(2):
             try:
@@ -68,7 +82,7 @@ class ApiWrapper:
                 self.logger.error("IncompleteRead exception while trying to download.")
                 self.delete_half_completed(url, path)
         return False
-        
+
     def delete_half_completed(self, url, path):
         name = str(os.path.basename(url))
         file_path = os.path.join(path, name)
@@ -76,22 +90,25 @@ class ApiWrapper:
         if os.path.exists(file_path):
             os.remove(file_path)
             self.logger.info(f"Removed path {file_path}")
-    
+
     def mk_dir_if_needed(self, path):
         if not os.path.exists(path):
             os.makedirs(path)
-    
+
+    @backoff.on_exception(backoff.expo, (RemoteDisconnected, PixivError), max_time=300)
     def user_bookmarks_novel(self, user_id, max_bookmark_id):
         self.refresh_auth_if_needed()
         return self.api.user_bookmarks_novel(user_id=user_id, max_bookmark_id=max_bookmark_id)
-    
+
+    @backoff.on_exception(backoff.expo, (RemoteDisconnected, PixivError), max_time=300)
     def user_bookmarks_illust(self, user_id, max_bookmark_id):
         self.refresh_auth_if_needed()
         return self.api.user_bookmarks_illust(user_id=user_id, max_bookmark_id=max_bookmark_id)
-    
+
     def parse_qs(self, url):
         return self.api.parse_qs(url)
-    
+
+    @backoff.on_exception(backoff.expo, (RemoteDisconnected, PixivError), max_time=300)
     def webview_novel(self, novel_id):
         self.refresh_auth_if_needed()
         return self.api.webview_novel(novel_id=novel_id)

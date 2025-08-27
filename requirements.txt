@@ -1,6 +1,2 @@
-wheel
-requests
-argparse
-selenium==4.28.1
 cloudscraper
 pixivpy3

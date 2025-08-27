@@ -1,43 +1,59 @@
 from api_wrapper import ApiWrapper
-from time import sleep
-import os
 import logging_utils
 from config import Config
 from bookmark_scraper import BookmarkScraper
+from bookmark_sorter import BookmarkSorter
 
-# Parameters
-config = Config()
-if os.path.exists("config.json"):
-    config.load("config.json")
-else:
-    config.input_refresh_token()
-    config.input_user_id()
-    config.save("config.json")
+POSSIBLE_ACTIONS = {
+    "1": "Download",
+    "2": "Scrape",
+    "3": "Sort and TL tags",
+    "4": "Sort and tag all downloads"
+}
 
-TOKEN = config.refresh_token
-DL_PATH = config.download_path
-INTERVAL = config.interval
-DL_SIZE = config.download_size
-USER_ID = config.user_id
+def get_bookmark_scraper() -> BookmarkScraper:
+    config = Config()
+    config.load_and_fill("config.json", for_downloads=True)
+    api_wrapper = ApiWrapper(refresh_token=config.refresh_token, illust_dl_size=config.download_size)
+    return BookmarkScraper(api_wrapper, config.user_id, config.download_path + "/bookmarks", config.interval)
 
-logger = logging_utils.setup_logging()
+def get_bookmark_sorter() -> BookmarkSorter:
+    config = Config()
+    config.load_and_fill("config.json", for_downloads=False)
+    return BookmarkSorter(config.download_path + "/bookmarks")
 
-# Login
-api_wrapper = ApiWrapper(refresh_token=TOKEN, illust_dl_size=DL_SIZE, logger=logger)
+def main():
+    logger = logging_utils.setup_logging()
+    try:
+        action_prompt = "What would you like to do?\n"
+        for key, action in POSSIBLE_ACTIONS.items():
+            action_prompt += f"{key} - {action}\n"
 
-# Init
-if not os.path.exists(DL_PATH):
-    logger.info(f"Setting up core download path at {DL_PATH}.")
-    os.makedirs(DL_PATH)
+        chosen_action = input(action_prompt).strip()
+        search_word = input("Choose bookmark type 'illust' or 'novel'\n").strip().upper() if chosen_action in ["1", "2"] else None
+        max_bookmark_id = input("Specify a max bookmark id or hit enter for none.\n").strip() if chosen_action in ["1", "2"] else None
 
-# Init BookmarkScraper
-bookmark_scraper = BookmarkScraper(api_wrapper, USER_ID, DL_PATH, logger, INTERVAL)
+        match([chosen_action, search_word]):
+            case ['1', 'NOVEL']:
+                get_bookmark_scraper().download_novels(max_bookmark_id=max_bookmark_id)
+            case ['2', 'NOVEL',]:
+                get_bookmark_scraper().scrape_novels(max_bookmark_id=max_bookmark_id)
+            case ['1', 'ILLUST']:
+                get_bookmark_scraper().download_illusts(max_bookmark_id=max_bookmark_id)
+            case ['2', 'ILLUST']:
+                get_bookmark_scraper().scrape_illusts(max_bookmark_id=max_bookmark_id)
+            case ['3', None]:
+                get_bookmark_sorter().sort_all_tags()
 
-# Download
-search_word = input("Choose bookmark type 'illust' or 'novel'\n")
-max_bookmark_id = input("Specify a max bookmark id or hit enter for none.\n")
+        logger.info(f"Finished action: {POSSIBLE_ACTIONS[chosen_action]}.")
 
-if search_word.upper() == 'NOVEL':
-    bookmark_scraper.download_novels(max_bookmark_id=max_bookmark_id.strip())
-if search_word.upper() == 'ILLUST':
-    bookmark_scraper.download_illusts(max_bookmark_id=max_bookmark_id.strip())
+        do_again = input("Finished. Do something else? Y/N\n").strip().upper()
+        if do_again == "Y":
+            return main()
+    except KeyboardInterrupt:
+        logger.info("User closing program.\n")
+        exit(0)
+
+
+if __name__ == "__main__":
+    main()
