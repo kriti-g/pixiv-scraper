@@ -7,7 +7,7 @@ from bookmark_sorter import BookmarkSorter
 POSSIBLE_ACTIONS = {
     "1": "Download",
     "2": "Scrape",
-    "3": "Sort and TL tags",
+    "3": "Sort and standardize tags",
     "4": "Sort and tag all downloads"
 }
 
